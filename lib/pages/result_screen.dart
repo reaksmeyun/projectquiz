@@ -9,6 +9,8 @@ class ResultScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    double percentage = (score / total) * 100;
+
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -25,14 +27,20 @@ class ResultScreen extends StatelessWidget {
               const Text(
                 "Quiz Completed!",
                 style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white),
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
               const SizedBox(height: 20),
               Text(
                 "Your Score: $score / $total",
                 style: const TextStyle(fontSize: 24, color: Colors.white),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                "Percentage: ${percentage.toStringAsFixed(1)}%",
+                style: const TextStyle(fontSize: 20, color: Colors.white70),
               ),
               const SizedBox(height: 40),
               ElevatedButton(
@@ -48,10 +56,13 @@ class ResultScreen extends StatelessWidget {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.white,
                   foregroundColor: Colors.deepOrange,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 40,
+                    vertical: 14,
+                  ),
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20)),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
                 ),
                 child: const Text(
                   "Play Again",

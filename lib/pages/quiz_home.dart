@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:projectquiz/pages/service.dart';
+import 'result_screen.dart';
 
 class QuizHome extends StatefulWidget {
   final int categoryId;
@@ -17,8 +18,17 @@ class _QuizHomeState extends State<QuizHome> {
   String selectedLanguage = "English";
   bool isLoading = true;
 
-  String? selectedAnswer; // Track selected answer
-  bool answered = false; // Flag to prevent multiple taps
+  String? selectedAnswer;
+  bool answered = false;
+
+  // Score tracking
+  int score = 0;
+  int totalCorrect = 0;
+
+  // Category info
+  String categoryEn = "";
+  String categoryKh = "";
+  String categoryZh = "";
 
   // Bearer token
   final String bearerToken = token;
@@ -39,9 +49,14 @@ class _QuizHomeState extends State<QuizHome> {
 
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
+
         final List data = decoded['questions'] ?? [];
 
         setState(() {
+          categoryEn = decoded['nameEn'] ?? "Category";
+          categoryKh = decoded['nameKh'] ?? "Category";
+          categoryZh = decoded['nameZh'] ?? "Category";
+
           questions = data.map<Map<String, dynamic>>((q) {
             return {
               'id': q['id'],
@@ -93,43 +108,87 @@ class _QuizHomeState extends State<QuizHome> {
   }
 
   void selectAnswer(String answer) {
-    if (answered) return; // prevent multiple taps
-
     setState(() {
       selectedAnswer = answer;
       answered = true;
     });
-
-    // Wait 1 second then go to next question
-    Future.delayed(const Duration(seconds: 1), () {
-      if (currentQuestionIndex < questions.length - 1) {
-        setState(() {
-          currentQuestionIndex++;
-          selectedAnswer = null;
-          answered = false;
-        });
-      } else {
-        showDialog(
-            context: context,
-            builder: (_) => AlertDialog(
-                  title: const Text("Quiz Completed"),
-                  content: const Text("You have finished the quiz."),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text("OK"),
-                    ),
-                  ],
-                ));
-      }
-    });
   }
 
   Color getOptionColor(String option, String correctAnswer) {
-    if (!answered) return Colors.deepOrange; // default button color
-    if (option == correctAnswer) return Colors.green; // correct
-    if (option == selectedAnswer && option != correctAnswer) return Colors.red; // wrong
-    return Colors.deepOrange; // other options remain default
+    if (!answered) return Colors.deepOrange;
+    if (option == correctAnswer) return Colors.green;
+    if (option == selectedAnswer && option != correctAnswer) return Colors.red;
+    return Colors.deepOrange;
+  }
+
+  Future<void> submitResult() async {
+    final url = Uri.parse("https://quiz-api.camtech-dev.online/api/report/submit");
+
+    final body = {
+      "score": score,
+      "totalQuestion": questions.length,
+      "totalCorrect": totalCorrect,
+      "categoryEn": categoryEn,
+      "categoryKh": categoryKh,
+      "categoryZh": categoryZh,
+      "userId": 14, // replace with logged-in user id
+    };
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $bearerToken",
+        },
+        body: jsonEncode(body),
+      );
+
+      if (response.statusCode == 200) {
+        print("✅ Result submitted: ${response.body}");
+      } else {
+        print("❌ Failed to submit result: ${response.body}");
+      }
+    } catch (e) {
+      print("⚠️ Error submitting result: $e");
+    }
+  }
+
+  void nextQuestion() {
+    if (!answered) return;
+
+    final correctAnswer = questions[currentQuestionIndex]['answerCode'];
+    if (selectedAnswer == correctAnswer) {
+      score += 1;
+      totalCorrect += 1;
+    }
+
+    if (currentQuestionIndex < questions.length - 1) {
+      setState(() {
+        currentQuestionIndex++;
+        selectedAnswer = null;
+        answered = false;
+      });
+    } else {
+      // Quiz finished
+      submitResult();
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ResultScreen(score: score, total: questions.length),
+        ),
+      );
+    }
+  }
+
+  void prevQuestion() {
+    if (currentQuestionIndex > 0) {
+      setState(() {
+        currentQuestionIndex--;
+        selectedAnswer = null;
+        answered = false;
+      });
+    }
   }
 
   @override
@@ -155,6 +214,13 @@ class _QuizHomeState extends State<QuizHome> {
         title: const Text("Quiz"),
         backgroundColor: Colors.deepOrange,
         actions: [
+          // Exit button
+          IconButton(
+            icon: const Icon(Icons.close),
+            onPressed: () {
+              Navigator.pop(context); // Exit without saving
+            },
+          ),
           DropdownButton<String>(
             value: selectedLanguage,
             dropdownColor: Colors.deepOrange.shade100,
@@ -196,6 +262,30 @@ class _QuizHomeState extends State<QuizHome> {
                   ),
                   child: Text(option, style: const TextStyle(fontSize: 18)),
                 )),
+            const Spacer(),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                ElevatedButton(
+                  onPressed: prevQuestion,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.grey,
+                  ),
+                  child: const Text("Back"),
+                ),
+                ElevatedButton(
+                  onPressed: nextQuestion,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.deepOrange,
+                  ),
+                  child: Text(
+                    currentQuestionIndex == questions.length - 1
+                        ? "Finish"
+                        : "Next",
+                  ),
+                ),
+              ],
+            )
           ],
         ),
       ),
