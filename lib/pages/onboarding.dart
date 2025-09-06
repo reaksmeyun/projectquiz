@@ -1,8 +1,20 @@
 import 'package:flutter/material.dart';
-import 'home.dart'; // HomeScreen will show categories
+import 'package:shared_preferences/shared_preferences.dart';
+import 'home.dart';
 
 class OnboardingScreen extends StatelessWidget {
   const OnboardingScreen({super.key});
+
+  Future<void> _completeOnboarding(BuildContext context) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('hasSeenOnboarding', true); // Save onboarding flag
+
+    // Navigate to HomeScreen after onboarding
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const HomeScreen()),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -34,16 +46,9 @@ class OnboardingScreen extends StatelessWidget {
             ),
             const SizedBox(height: 50),
             ElevatedButton(
-              onPressed: () {
-                // Navigate to HomeScreen to select category
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (context) => const HomeScreen()),
-                );
-              },
+              onPressed: () => _completeOnboarding(context),
               style: ElevatedButton.styleFrom(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
                 backgroundColor: Colors.white,
                 foregroundColor: Colors.deepOrange,
                 shape: RoundedRectangleBorder(
