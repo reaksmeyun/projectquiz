@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'home.dart'; // make sure this points to your HomeScreen
+import 'home.dart'; // Make sure this points to your HomeScreen
+import 'test_history_screen.dart'; // Import your Test History Screen
 
 class ResultScreen extends StatelessWidget {
   final int score;
@@ -45,7 +46,6 @@ class ResultScreen extends StatelessWidget {
               const SizedBox(height: 40),
               ElevatedButton(
                 onPressed: () {
-                  // Navigate back to HomeScreen to select category
                   Navigator.pushReplacement(
                     context,
                     MaterialPageRoute(
@@ -66,6 +66,32 @@ class ResultScreen extends StatelessWidget {
                 ),
                 child: const Text(
                   "Play Again",
+                  style: TextStyle(fontSize: 18),
+                ),
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const TestHistoryScreen(),
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.deepOrange,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 40,
+                    vertical: 14,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                ),
+                child: const Text(
+                  "View Test History",
                   style: TextStyle(fontSize: 18),
                 ),
               ),

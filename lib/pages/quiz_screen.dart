@@ -2,17 +2,18 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:projectquiz/pages/service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'result_screen.dart';
 
-class QuizHome extends StatefulWidget {
+class QuizScreen extends StatefulWidget {
   final int categoryId;
-  const QuizHome({super.key, required this.categoryId});
+  const QuizScreen({super.key, required this.categoryId});
 
   @override
-  State<QuizHome> createState() => _QuizHomeState();
+  State<QuizScreen> createState() => _QuizScreenState();
 }
 
-class _QuizHomeState extends State<QuizHome> {
+class _QuizScreenState extends State<QuizScreen> {
   List<Map<String, dynamic>> questions = [];
   int currentQuestionIndex = 0;
   String selectedLanguage = "English";
@@ -21,16 +22,16 @@ class _QuizHomeState extends State<QuizHome> {
   String? selectedAnswer;
   bool answered = false;
 
-  // Score tracking
   int score = 0;
   int totalCorrect = 0;
 
-  // Category info
   String categoryEn = "";
   String categoryKh = "";
   String categoryZh = "";
 
-  // Bearer token
+  // Store user answers
+  List<Map<String, String>> userAnswers = [];
+
   final String bearerToken = token;
 
   @override
@@ -39,51 +40,59 @@ class _QuizHomeState extends State<QuizHome> {
     fetchQuestions();
   }
 
-  Future<void> fetchQuestions() async {
-    final url = Uri.parse(
-        'https://quiz-api.camtech-dev.online/api/category/${widget.categoryId}/detail');
-    try {
-      final response = await http.get(url, headers: {
-        'Authorization': 'Bearer $bearerToken',
+Future<void> fetchQuestions() async {
+  final url = Uri.parse(
+      'https://quiz-api.camtech-dev.online/api/category/${widget.categoryId}/detail');
+
+  try {
+    final response = await http.get(url, headers: {
+      'Authorization': 'Bearer $bearerToken',
+    });
+
+    if (response.statusCode == 200) {
+      final decoded = jsonDecode(response.body);
+      final List data = decoded['questions'] ?? [];
+
+      // Shuffle the questions randomly
+      data.shuffle();
+
+      // Pick only first 10 questions or all if less than 10
+      final List limitedData = data.length > 10 ? data.sublist(0, 10) : data;
+
+      setState(() {
+        categoryEn = decoded['nameEn'] ?? "Category";
+        categoryKh = decoded['nameKh'] ?? "Category";
+        categoryZh = decoded['nameZh'] ?? "Category";
+
+        questions = limitedData.map<Map<String, dynamic>>((q) {
+          return {
+            'id': q['id'],
+            'questionEn': q['questionEn'],
+            'questionKh': q['questionKh'],
+            'questionZh': q['questionZh'],
+            'answerCode': q['answerCode'],
+            'optionsEn': q['optionEn'],
+            'optionsKh': q['optionKh'],
+            'optionsZh': q['optionZh'],
+          };
+        }).toList();
+
+        isLoading = false;
       });
-
-      if (response.statusCode == 200) {
-        final decoded = jsonDecode(response.body);
-
-        final List data = decoded['questions'] ?? [];
-
-        setState(() {
-          categoryEn = decoded['nameEn'] ?? "Category";
-          categoryKh = decoded['nameKh'] ?? "Category";
-          categoryZh = decoded['nameZh'] ?? "Category";
-
-          questions = data.map<Map<String, dynamic>>((q) {
-            return {
-              'id': q['id'],
-              'questionEn': q['questionEn'],
-              'questionKh': q['questionKh'],
-              'questionZh': q['questionZh'],
-              'answerCode': q['answerCode'],
-              'optionsEn': q['optionEn'],
-              'optionsKh': q['optionKh'],
-              'optionsZh': q['optionZh'],
-            };
-          }).toList();
-          isLoading = false;
-        });
-      } else {
-        setState(() {
-          isLoading = false;
-          questions = [];
-        });
-      }
-    } catch (e) {
+    } else {
       setState(() {
         isLoading = false;
         questions = [];
       });
     }
+  } catch (e) {
+    setState(() {
+      isLoading = false;
+      questions = [];
+    });
   }
+}
+
 
   String getQuestionText(Map<String, dynamic> question) {
     switch (selectedLanguage) {
@@ -108,6 +117,8 @@ class _QuizHomeState extends State<QuizHome> {
   }
 
   void selectAnswer(String answer) {
+    if (answered) return;
+
     setState(() {
       selectedAnswer = answer;
       answered = true;
@@ -154,10 +165,36 @@ class _QuizHomeState extends State<QuizHome> {
     }
   }
 
-  void nextQuestion() {
+  Future<void> saveTestLocally() async {
+    final prefs = await SharedPreferences.getInstance();
+    final String? existing = prefs.getString("test_history");
+    List<dynamic> history = existing != null ? jsonDecode(existing) : [];
+
+    final newTest = {
+      "id": DateTime.now().millisecondsSinceEpoch, // local unique id
+      "score": score,
+      "totalQuestion": questions.length,
+      "totalCorrect": totalCorrect,
+      "categoryEn": categoryEn,
+      "categoryKh": categoryKh,
+      "categoryZh": categoryZh,
+      "questions": userAnswers,
+    };
+
+    history.add(newTest);
+    await prefs.setString("test_history", jsonEncode(history));
+  }
+
+  void nextQuestion() async {
     if (!answered) return;
 
     final correctAnswer = questions[currentQuestionIndex]['answerCode'];
+    userAnswers.add({
+      "questionEn": questions[currentQuestionIndex]['questionEn'],
+      "userAnswer": selectedAnswer ?? "",
+      "answerCode": correctAnswer,
+    });
+
     if (selectedAnswer == correctAnswer) {
       score += 1;
       totalCorrect += 1;
@@ -171,7 +208,8 @@ class _QuizHomeState extends State<QuizHome> {
       });
     } else {
       // Quiz finished
-      submitResult();
+      await submitResult();
+      await saveTestLocally();
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -214,11 +252,10 @@ class _QuizHomeState extends State<QuizHome> {
         title: const Text("Quiz"),
         backgroundColor: Colors.deepOrange,
         actions: [
-          // Exit button
           IconButton(
             icon: const Icon(Icons.close),
             onPressed: () {
-              Navigator.pop(context); // Exit without saving
+              Navigator.pop(context); // exit without saving
             },
           ),
           DropdownButton<String>(
@@ -254,14 +291,22 @@ class _QuizHomeState extends State<QuizHome> {
               style: const TextStyle(fontSize: 20),
             ),
             const SizedBox(height: 24),
-            ...options.map((option) => ElevatedButton(
+            ...options.map(
+              (option) => Container(
+                margin: const EdgeInsets.symmetric(vertical: 6),
+                child: ElevatedButton(
                   onPressed: () => selectAnswer(option),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: getOptionColor(option, correctAnswer),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                   child: Text(option, style: const TextStyle(fontSize: 18)),
-                )),
+                ),
+              ),
+            ),
             const Spacer(),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -285,7 +330,7 @@ class _QuizHomeState extends State<QuizHome> {
                   ),
                 ),
               ],
-            )
+            ),
           ],
         ),
       ),

@@ -1,8 +1,9 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'quiz_home.dart';
+import 'quiz_screen.dart';
 import 'service.dart'; // Make sure baseURL is defined here
+import 'test_history_screen.dart'; // Import TestHistoryScreen
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -44,9 +45,6 @@ class _HomeScreenState extends State<HomeScreen> {
         },
       );
 
-      print("Status: ${response.statusCode}");
-      print("Body: ${response.body}");
-
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as List;
         setState(() {
@@ -62,7 +60,6 @@ class _HomeScreenState extends State<HomeScreen> {
         setState(() => categories = []);
       }
     } catch (e) {
-      print("Exception: $e");
       setState(() => categories = []);
     }
   }
@@ -79,8 +76,113 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  // Build Home tab content (banner + categories)
+  Widget buildHomeContent() {
+    return Column(
+      children: [
+        // Banner
+        Container(
+          height: 180,
+          width: double.infinity,
+          margin: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            color: Colors.deepOrange.shade200,
+            image: const DecorationImage(
+              image: AssetImage("images/banner.jpg"),
+              fit: BoxFit.cover,
+            ),
+          ),
+          alignment: Alignment.center,
+          child: const Text(
+            "Test Your Knowledge!",
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+        ),
+
+        // Categories Grid
+        Expanded(
+          child: categories.isEmpty
+              ? const Center(child: CircularProgressIndicator())
+              : GridView.builder(
+                  padding: const EdgeInsets.all(12),
+                  gridDelegate:
+                      const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                  ),
+                  itemCount: categories.length,
+                  itemBuilder: (context, index) {
+                    final category = categories[index];
+                    final categoryId = category['id'];
+                    final categoryName = getCategoryName(category);
+
+                    return GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                QuizScreen(categoryId: categoryId),
+                          ),
+                        );
+                      },
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          color: Colors.orangeAccent,
+                          image: category['iconUrl'] != null
+                              ? DecorationImage(
+                                  image: NetworkImage(category['iconUrl']),
+                                  fit: BoxFit.cover,
+                                  colorFilter: ColorFilter.mode(
+                                    Colors.black.withAlpha(128),
+                                    BlendMode.darken,
+                                  ),
+                                )
+                              : null,
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          categoryName,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Determine which tab to display
+    Widget currentTab;
+    if (_currentIndex == 0) {
+      currentTab = buildHomeContent();
+    } else if (_currentIndex == 1) {
+      currentTab = const TestHistoryScreen(); // Show Test History tab
+    } else {
+      currentTab = Center(
+        child: Text(
+          "${_tabs[_currentIndex]} Page (Coming Soon)",
+          style: const TextStyle(fontSize: 20),
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text("Quiz App", style: TextStyle(color: Colors.white)),
@@ -89,7 +191,7 @@ class _HomeScreenState extends State<HomeScreen> {
           DropdownButton<String>(
             value: _selectedLanguage,
             dropdownColor: const Color.fromARGB(255, 234, 203, 157)
-                .withAlpha(204), // fixed deprecated withOpacity
+                .withAlpha(204),
             underline: const SizedBox(),
             iconEnabledColor: Colors.white,
             onChanged: (value) {
@@ -114,100 +216,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      body: _currentIndex == 0
-          ? Column(
-              children: [
-                // Banner
-                Container(
-                  height: 180,
-                  width: double.infinity,
-                  margin: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    color: Colors.deepOrange.shade200,
-                    image: const DecorationImage(
-                      image: AssetImage("images/banner.jpg"),
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                  alignment: Alignment.center,
-                  child: const Text(
-                    "Test Your Knowledge!",
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-
-                // Categories Grid
-                Expanded(
-                  child: categories.isEmpty
-                      ? const Center(child: CircularProgressIndicator())
-                      : GridView.builder(
-                          padding: const EdgeInsets.all(12),
-                          gridDelegate:
-                              const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            mainAxisSpacing: 12,
-                            crossAxisSpacing: 12,
-                          ),
-                          itemCount: categories.length,
-                          itemBuilder: (context, index) {
-                            final category = categories[index];
-                            final categoryId = category['id'];
-                            final categoryName = getCategoryName(category);
-
-                            return GestureDetector(
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        QuizHome(categoryId: categoryId),
-                                  ),
-                                );
-                              },
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(16),
-                                  color: Colors.orangeAccent,
-                                  image: category['iconUrl'] != null
-                                      ? DecorationImage(
-                                          image: NetworkImage(
-                                              category['iconUrl']),
-                                          fit: BoxFit.cover,
-                                          colorFilter: ColorFilter.mode(
-                                            Colors.black.withAlpha(128),
-                                            BlendMode.darken,
-                                          ),
-                                        )
-                                      : null,
-                                ),
-                                alignment: Alignment.center,
-                                child: Text(
-                                  categoryName,
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                ),
-              ],
-            )
-          : Center(
-              child: Text(
-                "${_tabs[_currentIndex]} Page (Coming Soon)",
-                style: const TextStyle(fontSize: 20),
-              ),
-            ),
+      body: currentTab,
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         selectedItemColor: Colors.deepOrange,
@@ -217,10 +226,8 @@ class _HomeScreenState extends State<HomeScreen> {
         },
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: "Home"),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.history), label: "Test History"),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.leaderboard), label: "Top Users"),
+          BottomNavigationBarItem(icon: Icon(Icons.history), label: "Test History"),
+          BottomNavigationBarItem(icon: Icon(Icons.leaderboard), label: "Top Users"),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: "Profile"),
         ],
       ),
