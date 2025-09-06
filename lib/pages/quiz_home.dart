@@ -1,11 +1,10 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:html_unescape/html_unescape.dart';
-import 'result_screen.dart';
+import 'package:projectquiz/pages/service.dart';
 
 class QuizHome extends StatefulWidget {
-  final String categoryId;
+  final int categoryId;
   const QuizHome({super.key, required this.categoryId});
 
   @override
@@ -13,98 +12,125 @@ class QuizHome extends StatefulWidget {
 }
 
 class _QuizHomeState extends State<QuizHome> {
-  List<Map<String, dynamic>> quizList = [];
-  int currentIndex = 0;
-  String? selectedOption;
+  List<Map<String, dynamic>> questions = [];
+  int currentQuestionIndex = 0;
+  String selectedLanguage = "English";
   bool isLoading = true;
-  String? sessionToken;
+
+  String? selectedAnswer; // Track selected answer
+  bool answered = false; // Flag to prevent multiple taps
+
+  // Bearer token
+  final String bearerToken = token;
 
   @override
   void initState() {
     super.initState();
-    initSessionToken();
+    fetchQuestions();
   }
 
-  // Initialize session token
-  Future<void> initSessionToken() async {
-    final tokenResp = await http.get(Uri.parse(
-        'https://opentdb.com/api_token.php?command=request'));
-    if (tokenResp.statusCode == 200) {
-      final data = jsonDecode(tokenResp.body);
-      sessionToken = data['token'];
-      fetchQuiz(widget.categoryId);
-    }
-  }
+  Future<void> fetchQuestions() async {
+    final url = Uri.parse(
+        'https://quiz-api.camtech-dev.online/api/category/${widget.categoryId}/detail');
+    try {
+      final response = await http.get(url, headers: {
+        'Authorization': 'Bearer $bearerToken',
+      });
 
-  // Fetch quiz questions from API
-  Future<void> fetchQuiz(String categoryId) async {
-    setState(() {
-      isLoading = true;
-      selectedOption = null;
-      quizList = [];
-      currentIndex = 0;
-    });
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        final List data = decoded['questions'] ?? [];
 
-    final url =
-        'https://opentdb.com/api.php?amount=10&category=$categoryId&type=multiple&encode=url3986&token=$sessionToken';
-    final response = await http.get(Uri.parse(url));
-
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      if (data['response_code'] == 0) {
-        final unescape = HtmlUnescape();
-        quizList = (data['results'] as List)
-            .map((q) => {
-                  'question': unescape.convert(Uri.decodeComponent(q['question'])),
-                  'correct_answer': unescape.convert(Uri.decodeComponent(q['correct_answer'])),
-                  'options': [
-                    ...q['incorrect_answers']
-                        .map((e) => unescape.convert(Uri.decodeComponent(e)))
-                        .toList(),
-                    unescape.convert(Uri.decodeComponent(q['correct_answer']))
-                  ]..shuffle(),
-                  'score': 0
-                })
-            .toList();
+        setState(() {
+          questions = data.map<Map<String, dynamic>>((q) {
+            return {
+              'id': q['id'],
+              'questionEn': q['questionEn'],
+              'questionKh': q['questionKh'],
+              'questionZh': q['questionZh'],
+              'answerCode': q['answerCode'],
+              'optionsEn': q['optionEn'],
+              'optionsKh': q['optionKh'],
+              'optionsZh': q['optionZh'],
+            };
+          }).toList();
+          isLoading = false;
+        });
+      } else {
+        setState(() {
+          isLoading = false;
+          questions = [];
+        });
       }
+    } catch (e) {
+      setState(() {
+        isLoading = false;
+        questions = [];
+      });
     }
-
-    setState(() => isLoading = false);
   }
 
-  // Handle Next button
-  void nextQuestion() {
-  if (quizList.isEmpty) return; // Safety check
-
-  // Mark score for current question
-  if (selectedOption == quizList[currentIndex]['correct_answer']) {
-    quizList[currentIndex]['score'] = 1;
-  } else {
-    quizList[currentIndex]['score'] = 0;
+  String getQuestionText(Map<String, dynamic> question) {
+    switch (selectedLanguage) {
+      case "Khmer":
+        return question['questionKh'] ?? question['questionEn'];
+      case "Chinese":
+        return question['questionZh'] ?? question['questionEn'];
+      default:
+        return question['questionEn'];
+    }
   }
 
-  if (currentIndex < quizList.length - 1) {
+  List<String> getOptions(Map<String, dynamic> question) {
+    switch (selectedLanguage) {
+      case "Khmer":
+        return List<String>.from(question['optionsKh'] ?? question['optionsEn']);
+      case "Chinese":
+        return List<String>.from(question['optionsZh'] ?? question['optionsEn']);
+      default:
+        return List<String>.from(question['optionsEn']);
+    }
+  }
+
+  void selectAnswer(String answer) {
+    if (answered) return; // prevent multiple taps
+
     setState(() {
-      currentIndex++;
-      selectedOption = null;
+      selectedAnswer = answer;
+      answered = true;
     });
-  } else {
-    // Calculate total score safely
-    final totalScore = quizList.fold<int>(
-      0,
-      (sum, q) => sum + ((q['score'] is int) ? q['score'] as int : 0),
-    );
 
-    // Navigate to ResultScreen
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) =>
-            ResultScreen(score: totalScore, total: quizList.length),
-      ),
-    );
+    // Wait 1 second then go to next question
+    Future.delayed(const Duration(seconds: 1), () {
+      if (currentQuestionIndex < questions.length - 1) {
+        setState(() {
+          currentQuestionIndex++;
+          selectedAnswer = null;
+          answered = false;
+        });
+      } else {
+        showDialog(
+            context: context,
+            builder: (_) => AlertDialog(
+                  title: const Text("Quiz Completed"),
+                  content: const Text("You have finished the quiz."),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text("OK"),
+                    ),
+                  ],
+                ));
+      }
+    });
   }
-}
+
+  Color getOptionColor(String option, String correctAnswer) {
+    if (!answered) return Colors.deepOrange; // default button color
+    if (option == correctAnswer) return Colors.green; // correct
+    if (option == selectedAnswer && option != correctAnswer) return Colors.red; // wrong
+    return Colors.deepOrange; // other options remain default
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -114,99 +140,63 @@ class _QuizHomeState extends State<QuizHome> {
       );
     }
 
+    if (questions.isEmpty) {
+      return const Scaffold(
+        body: Center(child: Text("No questions found.")),
+      );
+    }
+
+    final question = questions[currentQuestionIndex];
+    final options = getOptions(question);
+    final correctAnswer = question['answerCode'];
+
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Colors.orangeAccent, Colors.deepOrange],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
+      appBar: AppBar(
+        title: const Text("Quiz"),
+        backgroundColor: Colors.deepOrange,
+        actions: [
+          DropdownButton<String>(
+            value: selectedLanguage,
+            dropdownColor: Colors.deepOrange.shade100,
+            underline: const SizedBox(),
+            iconEnabledColor: Colors.white,
+            onChanged: (value) {
+              setState(() {
+                selectedLanguage = value!;
+              });
+            },
+            items: const [
+              DropdownMenuItem(value: "English", child: Text("English")),
+              DropdownMenuItem(value: "Khmer", child: Text("Khmer")),
+              DropdownMenuItem(value: "Chinese", child: Text("Chinese")),
+            ],
           ),
-        ),
-        child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Question card
-                Card(
-                  key: ValueKey(currentIndex),
-                  color: Colors.white.withOpacity(0.9),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20)),
-                  elevation: 8,
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      children: [
-                        Text(
-                          quizList[currentIndex]['question'],
-                          style: const TextStyle(
-                              fontSize: 22, fontWeight: FontWeight.bold),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 20),
-                        // Options
-                        ...quizList[currentIndex]['options'].map<Widget>((opt) {
-                          final color = selectedOption == null
-                              ? Colors.white
-                              : (opt == quizList[currentIndex]['correct_answer']
-                                  ? Colors.green
-                                  : (selectedOption == opt
-                                      ? Colors.red
-                                      : Colors.white));
-                          return GestureDetector(
-                            onTap: () => setState(() => selectedOption = opt),
-                            child: Container(
-                              margin: const EdgeInsets.symmetric(vertical: 8),
-                              padding: const EdgeInsets.all(14),
-                              decoration: BoxDecoration(
-                                color: color,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: Colors.black12),
-                                boxShadow: const [
-                                  BoxShadow(
-                                      color: Colors.black26,
-                                      blurRadius: 4,
-                                      offset: Offset(2, 2)),
-                                ],
-                              ),
-                              child: Center(
-                                child: Text(
-                                  opt,
-                                  style: TextStyle(
-                                      color: selectedOption == null
-                                          ? Colors.black
-                                          : Colors.white,
-                                      fontSize: 18),
-                                ),
-                              ),
-                            ),
-                          );
-                        }),
-                        const SizedBox(height: 20),
-                        ElevatedButton(
-                          onPressed:
-                              selectedOption != null ? nextQuestion : null,
-                          style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 40, vertical: 14),
-                              backgroundColor: Colors.deepOrange,
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(20))),
-                          child: const Text(
-                            'Next',
-                            style: TextStyle(fontSize: 18, color: Colors.white),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
+        ],
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              "Question ${currentQuestionIndex + 1}/${questions.length}",
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
-          ),
+            const SizedBox(height: 12),
+            Text(
+              getQuestionText(question),
+              style: const TextStyle(fontSize: 20),
+            ),
+            const SizedBox(height: 24),
+            ...options.map((option) => ElevatedButton(
+                  onPressed: () => selectAnswer(option),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: getOptionColor(option, correctAnswer),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  child: Text(option, style: const TextStyle(fontSize: 18)),
+                )),
+          ],
         ),
       ),
     );

@@ -1,5 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'quiz_home.dart';
+import 'service.dart'; // Make sure baseURL is defined here
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -12,34 +15,83 @@ class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
   String _selectedLanguage = "English";
 
-  // Categories
-  final Map<String, String> categories = {
-    'Geography': '22',
-    'History': '23',
-    'Art': '25',
-    'Animals': '27',
-    'Politics': '24',
-  };
+  // Categories list
+  List<Map<String, dynamic>> categories = [];
 
   // Bottom nav tabs
   final List<String> _tabs = ["Home", "Test History", "Top Users", "Profile"];
+
+  // Your Bearer token
+  final String bearerToken =
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MTQsInBob25lIjoiMDg4NzYwNjEzNSIsImlhdCI6MTc1NzEzNzI0NiwiZXhwIjoxNzg4Njk0ODQ2fQ.Zr0dyj9hUNT07FchzyrPw-nSe2booWPLXvldIVZKBvo';
+
+  @override
+  void initState() {
+    super.initState();
+    fetchCategories();
+  }
+
+  // Fetch categories from API with token
+  Future<void> fetchCategories() async {
+    final url = Uri.parse('$baseURL/api/category/list');
+
+    try {
+      final response = await http.get(
+        url,
+        headers: {
+          'Authorization': 'Bearer $bearerToken',
+          'Accept': 'application/json',
+        },
+      );
+
+      print("Status: ${response.statusCode}");
+      print("Body: ${response.body}");
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as List;
+        setState(() {
+          categories = data.map<Map<String, dynamic>>((cat) => {
+                'id': cat['id'],
+                'nameEn': cat['nameEn'],
+                'nameKh': cat['nameKh'],
+                'nameZh': cat['nameZh'],
+                'iconUrl': cat['iconUrl'],
+              }).toList();
+        });
+      } else {
+        setState(() => categories = []);
+      }
+    } catch (e) {
+      print("Exception: $e");
+      setState(() => categories = []);
+    }
+  }
+
+  // Get category name based on selected language
+  String getCategoryName(Map<String, dynamic> category) {
+    switch (_selectedLanguage) {
+      case "Khmer":
+        return category['nameKh'] ?? category['nameEn'];
+      case "Chinese":
+        return category['nameZh'] ?? category['nameEn'];
+      default:
+        return category['nameEn'];
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Quiz App", style: TextStyle(color: Colors.white)),
-
         backgroundColor: Colors.deepOrange,
-
         actions: [
           DropdownButton<String>(
             value: _selectedLanguage,
-            dropdownColor: const Color.fromARGB(255, 234, 203, 157).withOpacity(
-              0.8,
-            ), // light transparent orange
+            dropdownColor: const Color.fromARGB(255, 234, 203, 157)
+                .withAlpha(204), // fixed deprecated withOpacity
             underline: const SizedBox(),
-            iconEnabledColor: Colors.white, // arrow icon in white
+            iconEnabledColor: Colors.white,
             onChanged: (value) {
               setState(() {
                 _selectedLanguage = value!;
@@ -65,6 +117,7 @@ class _HomeScreenState extends State<HomeScreen> {
       body: _currentIndex == 0
           ? Column(
               children: [
+                // Banner
                 Container(
                   height: 180,
                   width: double.infinity,
@@ -87,46 +140,65 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                 ),
+
+                // Categories Grid
                 Expanded(
-                  child: GridView.builder(
-                    padding: const EdgeInsets.all(12),
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          mainAxisSpacing: 12,
-                          crossAxisSpacing: 12,
-                        ),
-                    itemCount: categories.length,
-                    itemBuilder: (context, index) {
-                      final category = categories.keys.elementAt(index);
-                      final categoryId = categories[category]!;
-                      return GestureDetector(
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => QuizHome(categoryId: categoryId),
-                            ),
-                          );
-                        },
-                        child: Container(
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(16),
-                            color: Colors.orangeAccent,
+                  child: categories.isEmpty
+                      ? const Center(child: CircularProgressIndicator())
+                      : GridView.builder(
+                          padding: const EdgeInsets.all(12),
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            mainAxisSpacing: 12,
+                            crossAxisSpacing: 12,
                           ),
-                          alignment: Alignment.center,
-                          child: Text(
-                            category,
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
+                          itemCount: categories.length,
+                          itemBuilder: (context, index) {
+                            final category = categories[index];
+                            final categoryId = category['id'];
+                            final categoryName = getCategoryName(category);
+
+                            return GestureDetector(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        QuizHome(categoryId: categoryId),
+                                  ),
+                                );
+                              },
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(16),
+                                  color: Colors.orangeAccent,
+                                  image: category['iconUrl'] != null
+                                      ? DecorationImage(
+                                          image: NetworkImage(
+                                              category['iconUrl']),
+                                          fit: BoxFit.cover,
+                                          colorFilter: ColorFilter.mode(
+                                            Colors.black.withAlpha(128),
+                                            BlendMode.darken,
+                                          ),
+                                        )
+                                      : null,
+                                ),
+                                alignment: Alignment.center,
+                                child: Text(
+                                  categoryName,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
                         ),
-                      );
-                    },
-                  ),
                 ),
               ],
             )
@@ -146,13 +218,9 @@ class _HomeScreenState extends State<HomeScreen> {
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: "Home"),
           BottomNavigationBarItem(
-            icon: Icon(Icons.history),
-            label: "Test History",
-          ),
+              icon: Icon(Icons.history), label: "Test History"),
           BottomNavigationBarItem(
-            icon: Icon(Icons.leaderboard),
-            label: "Top Users",
-          ),
+              icon: Icon(Icons.leaderboard), label: "Top Users"),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: "Profile"),
         ],
       ),
