@@ -33,36 +33,44 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // Fetch categories from API with token
-  Future<void> fetchCategories() async {
-    final url = Uri.parse('$baseURL/api/category/list');
+// Fetch categories from API with token
+Future<void> fetchCategories() async {
+  final url = Uri.parse('$baseURL/api/category/list');
+  print("➡️ Fetching categories from: $url");
 
-    try {
-      final response = await http.get(
-        url,
-        headers: {
-          'Authorization': 'Bearer $bearerToken',
-          'Accept': 'application/json',
-        },
-      );
+  try {
+    final response = await http.get(
+      url,
+      headers: {
+        'Authorization': 'Bearer $bearerToken',
+        'Accept': 'application/json',
+      },
+    );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as List;
-        setState(() {
-          categories = data.map<Map<String, dynamic>>((cat) => {
-                'id': cat['id'],
-                'nameEn': cat['nameEn'],
-                'nameKh': cat['nameKh'],
-                'nameZh': cat['nameZh'],
-                'iconUrl': cat['iconUrl'],
-              }).toList();
-        });
-      } else {
-        setState(() => categories = []);
-      }
-    } catch (e) {
+    print("⬅️ Response status: ${response.statusCode}");
+    print("⬅️ Response body: ${response.body}");
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as List;
+      setState(() {
+        categories = data.map<Map<String, dynamic>>((cat) => {
+              'id': cat['id'],
+              'nameEn': cat['nameEn'] ?? cat['nameEnn'], // ✅ fallback
+              'nameKh': cat['nameKh'],
+              'nameZh': cat['nameZh'],
+              'iconUrl': cat['iconUrl'],
+            }).toList();
+      });
+    } else {
+      print("⚠️ Unexpected status: ${response.statusCode}");
       setState(() => categories = []);
     }
+  } catch (e) {
+    print("❌ Error fetching categories: $e");
+    setState(() => categories = []);
   }
+}
+
 
   // Get category name based on selected language
   String getCategoryName(Map<String, dynamic> category) {
