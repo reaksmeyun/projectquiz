@@ -24,7 +24,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // Your Bearer token
   final String bearerToken =
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MTQsInBob25lIjoiMDg4NzYwNjEzNSIsImlhdCI6MTc1NzEzNzI0NiwiZXhwIjoxNzg4Njk0ODQ2fQ.Zr0dyj9hUNT07FchzyrPw-nSe2booWPLXvldIVZKBvo';
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MTQsInBob25lIjoiMDg4NzYwNjEzNSIsImlhdCI6MTc1NzIzMzIzMywiZXhwIjoxNzg4NzkwODMzfQ.2nDyLZ6UTTjWFFiy1EFG0kyipX6JQJWaA96Xc370XGI';
 
   @override
   void initState() {

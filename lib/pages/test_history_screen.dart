@@ -88,7 +88,7 @@ class _TestHistoryScreenState extends State<TestHistoryScreen> {
                         child: Text(cat),
                       ),
                     )
-                    .toList(),
+                    ,
               ],
               onChanged: (value) {
                 filterByCategory(value!);
